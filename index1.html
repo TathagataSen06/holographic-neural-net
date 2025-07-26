@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Holographic Neural Network with Controls</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000011;
+            color: #00aaff;
+            font-family: 'Orbitron', sans-serif;
+            display: flex; /* Use flexbox for layout */
+        }
+        
+        #sidebar {
+            width: 320px;
+            padding: 20px;
+            background-color: #000518;
+            border-right: 1px solid rgba(0, 170, 255, 0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            z-index: 10;
+            overflow-y: auto;
+        }
+
+        #canvas-container {
+            flex-grow: 1; /* Canvas takes up the remaining space */
+            height: 100vh;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        .ui-panel {
+            padding: 15px 20px;
+            background: rgba(0, 20, 40, 0.7);
+            border: 1px solid rgba(0, 170, 255, 0.5);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-shadow: 0 0 25px rgba(0, 170, 255, 0.3);
+        }
+
+        h1, h2 {
+            font-size: 1.5em;
+            margin: 0 0 10px 0;
+            color: #ffffff;
+            text-shadow: 0 0 10px #00aaff;
+            letter-spacing: 2px;
+        }
+        h2 {
+            font-size: 1.2em;
+            margin-top: 15px;
+        }
+        p, label {
+            margin: 5px 0;
+            font-size: 0.9em;
+            line-height: 1.4;
+            color: #aadeff;
+        }
+        .status-light {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: #00ffaa;
+            border-radius: 50%;
+            margin-right: 10px;
+            box-shadow: 0 0 15px #00ffaa;
+            animation: pulse-green 2s infinite;
+        }
+        #button-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .button {
+            padding: 12px 25px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1em;
+            color: #00aaff;
+            background-color: transparent;
+            border: 2px solid #00aaff;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 0 15px rgba(0, 170, 255, 0.2);
+            text-align: center;
+        }
+        .button:hover {
+            background-color: rgba(0, 170, 255, 0.2);
+            box-shadow: 0 0 25px rgba(0, 170, 255, 0.5);
+            color: #ffffff;
+        }
+        .button.active {
+            background-color: rgba(0, 170, 255, 0.3);
+            box-shadow: 0 0 25px rgba(0, 170, 255, 0.7);
+            color: #ffffff;
+        }
+        .slider-container {
+            margin-top: 10px;
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 5px;
+            background: rgba(0, 170, 255, 0.3);
+            border-radius: 5px;
+            outline: none;
+            margin-top: 5px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #00aaff;
+            cursor: pointer;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #00aaff;
+        }
+        @keyframes pulse-green { 0% { box-shadow: 0 0 5px #00ffaa; } 50% { box-shadow: 0 0 20px #00ffaa, 0 0 30px #00ffaa; } 100% { box-shadow: 0 0 5px #00ffaa; } }
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <div id="info-panel" class="ui-panel">
+            <h1>Project: Chimera III</h1>
+            <p><span class="status-light"></span>STATUS: <span style="color: #00ffaa;">ONLINE</span></p>
+            <p>MODEL: Gated Recurrent Unit</p>
+            <p>INFO: Drag on canvas to rotate.</p>
+        </div>
+
+        <div id="control-panel" class="ui-panel">
+            <h2>SYSTEM CONTROLS</h2>
+            <div class="slider-container">
+                <label for="pulse-speed">Pulse Speed</label>
+                <input type="range" id="pulse-speed" min="500" max="2000" value="1200">
+            </div>
+            <div class="slider-container">
+                <label for="rotation-speed">Rotation Speed</label>
+                <input type="range" id="rotation-speed" min="0" max="20" value="3">
+            </div>
+            <div class="slider-container">
+                <label for="glow-intensity">Glow Intensity</label>
+                <input type="range" id="glow-intensity" min="0" max="5" value="1.0" step="0.1">
+            </div>
+        </div>
+
+        <div id="button-controls" class="ui-panel">
+            <button id="pulse-btn" class="button">Pulse Input</button>
+            <button id="auto-pulse-btn" class="button active">Toggle Auto Pulse</button>
+        </div>
+    </div>
+    <div id="canvas-container"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+
+    <script>
+        // --- DOM & SCENE REFERENCES ---
+        const canvasContainer = document.getElementById('canvas-container');
+        let scene, camera, renderer, controls, composer, bloomPass;
+        
+        // --- SIMULATION PARAMS ---
+        let rotationSpeed = 0.0003;
+        let pulseDuration = 1200;
+        let isAutoPulse = true; // Start with auto-pulse on
+        let lastAutoPulseTime = 0;
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, canvasContainer.clientWidth / canvasContainer.clientHeight, 0.1, 1000);
+            camera.position.z = 45;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.toneMapping = THREE.ReinhardToneMapping;
+            canvasContainer.appendChild(renderer.domElement);
+
+            // --- CONTROLS ---
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 10;
+            controls.maxDistance = 150;
+
+            // --- LIGHTING ---
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+            scene.add(ambientLight);
+            const pointLight = new THREE.PointLight(0xffffff, 0.5);
+            camera.add(pointLight);
+            scene.add(camera);
+
+            // --- POST-PROCESSING (HOLOGRAPHIC GLOW) ---
+            const renderScene = new THREE.RenderPass(scene, camera);
+            bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(canvasContainer.clientWidth, canvasContainer.clientHeight), 1.5, 0.4, 0.85);
+            bloomPass.threshold = 0;
+            bloomPass.strength = 1.0;
+            bloomPass.radius = 0.7;
+
+            composer = new THREE.EffectComposer(renderer);
+            composer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+            composer.addPass(renderScene);
+            composer.addPass(bloomPass);
+
+            // --- BUILD THE NETWORK & PARTICLES ---
+            buildNetwork();
+            createBackgroundParticles();
+            
+            // --- EVENT LISTENERS ---
+            setupEventListeners();
+            window.addEventListener('resize', onWindowResize);
+
+            // --- START ANIMATION ---
+            animate();
+        }
+
+        const networkGroup = new THREE.Group();
+        const layers = [];
+        const connections = [];
+
+        function buildNetwork() {
+            scene.add(networkGroup);
+            const layerConfigs = [
+                { count: 10, color: 0x00aaff, radius: 0.6 },
+                { count: 16, color: 0xaa00ff, radius: 0.5 },
+                { count: 20, color: 0xaa00ff, radius: 0.4 },
+                { count: 16, color: 0xaa00ff, radius: 0.5 },
+                { count: 8,  color: 0x00ffaa, radius: 0.8 }
+            ];
+            const layerDistance = 10;
+            const totalWidth = (layerConfigs.length - 1) * layerDistance;
+
+            layerConfigs.forEach((config, i) => {
+                const layer = new THREE.Group();
+                const x = i * layerDistance - totalWidth / 2;
+                layer.position.x = x;
+                for (let j = 0; j < config.count; j++) {
+                    const geometry = new THREE.SphereGeometry(config.radius, 16, 16);
+                    const material = new THREE.MeshStandardMaterial({
+                        color: config.color, emissive: config.color, emissiveIntensity: 0.4, // Increased base intensity
+                        metalness: 0.7, roughness: 0.4, transparent: true, opacity: 0.7
+                    });
+                    const neuron = new THREE.Mesh(geometry, material);
+                    const angle = (j / config.count) * Math.PI * 2;
+                    const radius = config.count * 0.7;
+                    neuron.position.y = Math.sin(angle) * radius;
+                    neuron.position.z = Math.cos(angle) * radius;
+                    layer.add(neuron);
+                }
+                layers.push(layer);
+                networkGroup.add(layer);
+            });
+
+            for (let i = 0; i < layers.length - 1; i++) {
+                layers[i].children.forEach(neuron1 => {
+                    layers[i + 1].children.forEach(neuron2 => {
+                        if (Math.random() > 0.85) {
+                            const material = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.05 }); // Increased base opacity
+                            const points = [
+                                new THREE.Vector3().copy(neuron1.position).add(layers[i].position),
+                                new THREE.Vector3().copy(neuron2.position).add(layers[i + 1].position)
+                            ];
+                            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                            const line = new THREE.Line(geometry, material);
+                            connections.push({ line, from: neuron1, to: neuron2, baseOpacity: 0.05 }); // Store new base opacity
+                            networkGroup.add(line);
+                        }
+                    });
+                });
+            }
+        }
+        
+        function createBackgroundParticles() {
+            const particlesGeometry = new THREE.BufferGeometry();
+            const particlesCnt = 3000;
+            const posArray = new Float32Array(particlesCnt * 3);
+            for(let i = 0; i < particlesCnt * 3; i++) {
+                posArray[i] = (Math.random() - 0.5) * 200;
+            }
+            particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+            const particlesMaterial = new THREE.PointsMaterial({
+                size: 0.05, color: 0x00aaff, transparent: true,
+                opacity: 0.3, blending: THREE.AdditiveBlending
+            });
+            const particleMesh = new THREE.Points(particlesGeometry, particlesMaterial);
+            scene.add(particleMesh);
+        }
+
+        const pulses = [];
+        const pulseGeometry = new THREE.SphereGeometry(0.2, 8, 8);
+        function firePulse() {
+            if (pulses.length > 100) return;
+            const startNeuron = layers[0].children[Math.floor(Math.random() * layers[0].children.length)];
+            const pulse = new THREE.Mesh(pulseGeometry, new THREE.MeshBasicMaterial({ color: 0xffffff }));
+            startNeuron.getWorldPosition(pulse.position);
+            pulses.push({ mesh: pulse, startTime: Date.now(), startNode: startNeuron, endNode: null, progress: 0 });
+            scene.add(pulse);
+            flashNeuron(startNeuron, true);
+        }
+        
+        function setupEventListeners() {
+            document.getElementById('pulse-btn').addEventListener('click', () => {
+                for(let i = 0; i < 5; i++) { setTimeout(firePulse, i * 50); }
+            });
+            const autoPulseBtn = document.getElementById('auto-pulse-btn');
+            autoPulseBtn.addEventListener('click', () => {
+                isAutoPulse = !isAutoPulse;
+                autoPulseBtn.classList.toggle('active', isAutoPulse);
+            });
+            document.getElementById('pulse-speed').addEventListener('input', e => pulseDuration = 2500 - e.target.value);
+            document.getElementById('rotation-speed').addEventListener('input', e => rotationSpeed = e.target.value / 10000);
+            document.getElementById('glow-intensity').addEventListener('input', e => bloomPass.strength = e.target.value);
+        }
+
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            if (isAutoPulse && (Date.now() - lastAutoPulseTime > 400)) {
+                firePulse();
+                lastAutoPulseTime = Date.now();
+            }
+            networkGroup.rotation.y += rotationSpeed;
+            networkGroup.rotation.x += rotationSpeed / 3;
+
+            for (let i = pulses.length - 1; i >= 0; i--) {
+                const pulse = pulses[i];
+                const elapsedTime = Date.now() - pulse.startTime;
+                pulse.progress = Math.min(elapsedTime / pulseDuration, 1);
+                if (pulse.progress >= 1) {
+                    flashNeuron(pulse.endNode, true);
+                    const possibleConnections = connections.filter(c => c.from === pulse.endNode);
+                    if (possibleConnections.length === 0) {
+                        scene.remove(pulse.mesh); pulses.splice(i, 1); continue;
+                    }
+                    const nextConnection = possibleConnections[Math.floor(Math.random() * possibleConnections.length)];
+                    pulse.startNode = nextConnection.from;
+                    pulse.endNode = nextConnection.to;
+                    pulse.startTime = Date.now();
+                    pulse.progress = 0;
+                } else {
+                    if (!pulse.endNode) {
+                        const possibleConns = connections.filter(c => c.from === pulse.startNode);
+                        if (possibleConns.length > 0) {
+                           pulse.endNode = possibleConns[Math.floor(Math.random() * possibleConns.length)].to;
+                        } else {
+                           scene.remove(pulse.mesh); pulses.splice(i, 1); continue;
+                        }
+                    }
+                    if (pulse.endNode) {
+                        const startPos = new THREE.Vector3(); pulse.startNode.getWorldPosition(startPos);
+                        const endPos = new THREE.Vector3(); pulse.endNode.getWorldPosition(endPos);
+                        pulse.mesh.position.lerpVectors(startPos, endPos, pulse.progress);
+                        const activeConn = connections.find(c => c.from === pulse.startNode && c.to === pulse.endNode);
+                        if(activeConn) {
+                           activeConn.line.material.opacity = activeConn.baseOpacity + Math.sin(pulse.progress * Math.PI) * 0.6; // Brighter pulse line
+                           activeConn.line.material.color.set(0xffffff);
+                        }
+                    }
+                }
+            }
+            
+            connections.forEach(c => {
+                c.line.material.opacity = THREE.MathUtils.lerp(c.line.material.opacity, c.baseOpacity, 0.1);
+                c.line.material.color.lerp(new THREE.Color(0x00ffff), 0.1);
+            });
+            controls.update();
+            composer.render(delta);
+        }
+        
+        function flashNeuron(neuron, createShockwave = false) {
+            if (!neuron) return;
+            const originalIntensity = neuron.material.emissiveIntensity;
+            neuron.material.emissiveIntensity = 4.0; // Increased flash intensity
+            setTimeout(() => { neuron.material.emissiveIntensity = originalIntensity; }, 150);
+            if (createShockwave) {
+                const shockwave = new THREE.Mesh(
+                    new THREE.SphereGeometry(neuron.geometry.parameters.radius, 16, 16),
+                    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 })
+                );
+                neuron.getWorldPosition(shockwave.position);
+                scene.add(shockwave);
+                let scale = 1;
+                function animateShockwave() {
+                    scale += 0.15;
+                    shockwave.scale.set(scale, scale, scale);
+                    shockwave.material.opacity -= 0.05;
+                    if (shockwave.material.opacity <= 0) {
+                        scene.remove(shockwave);
+                    } else {
+                        requestAnimationFrame(animateShockwave);
+                    }
+                }
+                animateShockwave();
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = canvasContainer.clientWidth / canvasContainer.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+            composer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+        }
+
+        init();
+    </script>
+</body>
+</html>
